@@ -105,6 +105,33 @@ import { getSegmentParam } from '../../shared/lib/router/utils/get-segment-param
 type AppPageRenderOperation = 'render' | 'prerender'
 
 /**
+ * Extra `Vary` values per route, read from the `NEXT_EXTRA_VARY` env var as a
+ * JSON map of path to comma-separated header names, e.g.
+ * `{"/":"bom-country, bom-device-type","/collections":"bom-country"}`.
+ * "/" matches only the root; any other key matches that path and its children.
+ * Needed on Vercel, where `Vary` set by middleware or `next.config` headers is
+ * not preserved next to the `Vary` this render emits.
+ */
+function getExtraVaryValues(pathname: string): string[] {
+  const raw = process.env.NEXT_EXTRA_VARY
+  if (!raw) return []
+  try {
+    const config: Record<string, string> = JSON.parse(raw)
+    const values: string[] = []
+    for (const [route, vary] of Object.entries(config)) {
+      const matches =
+        route === '/'
+          ? pathname === '/'
+          : pathname === route || pathname.startsWith(`${route}/`)
+      if (matches) values.push(...String(vary).split(','))
+    }
+    return values
+  } catch {
+    return []
+  }
+}
+
+/**
  * Builds the cache key for the most complete prerenderable shell we can derive
  * from the shell that matched this request. Only params that can still be
  * filled by `generateStaticParams` are substituted; fully dynamic params stay
@@ -788,7 +815,10 @@ export function createAppPageEntrypoint({
       } else {
         const seenVary = new Set(existingVaryValues.map((v) => v.toLowerCase()))
         const mergedVary = [...existingVaryValues]
-        for (const nextVary of varyHeader.split(',').map((v) => v.trim())) {
+        for (const nextVary of [
+          ...varyHeader.split(','),
+          ...getExtraVaryValues(resolvedPathname),
+        ].map((v) => v.trim())) {
           if (nextVary && !seenVary.has(nextVary.toLowerCase())) {
             seenVary.add(nextVary.toLowerCase())
             mergedVary.push(nextVary)
