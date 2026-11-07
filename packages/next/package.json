@@ -1,6 +1,6 @@
 {
   "name": "next",
-  "version": "16.4.2",
+  "version": "16.4.2-bombas.1",
   "description": "The React Framework",
   "main": "./dist/server/next.js",
   "license": "MIT",

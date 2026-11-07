@@ -772,7 +772,30 @@ export function createAppPageEntrypoint({
         resolvedPathname,
         interceptionRoutePatterns
       )
-      res.setHeader('Vary', varyHeader)
+      // Merge with any Vary value already set (middleware, next.config
+      // headers, etc.) instead of overwriting it.
+      const existingVary = res.getHeader('Vary')
+      const existingVaryValues = (
+        Array.isArray(existingVary)
+          ? existingVary.join(',')
+          : `${existingVary ?? ''}`
+      )
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+      if (existingVaryValues.includes('*')) {
+        res.setHeader('Vary', '*')
+      } else {
+        const seenVary = new Set(existingVaryValues.map((v) => v.toLowerCase()))
+        const mergedVary = [...existingVaryValues]
+        for (const nextVary of varyHeader.split(',').map((v) => v.trim())) {
+          if (nextVary && !seenVary.has(nextVary.toLowerCase())) {
+            seenVary.add(nextVary.toLowerCase())
+            mergedVary.push(nextVary)
+          }
+        }
+        res.setHeader('Vary', mergedVary.join(', '))
+      }
       let parentSpan: Span | undefined
       const invokeRouteModule = async (
         span: Span | undefined,
